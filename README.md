@@ -26,3 +26,20 @@ Before implementing or modifying ANY backend API:
 
 Before implementing or modifying ANY React UI/styles:
 - Read: docs/agent/react/SKILL.md
+
+
+## Quick start
+
+Copy only the skill you need into your project:
+
+NestJS:
+docs/agent/nestjs/SKILL.md
+root/AGENTS.md
+
+
+React:
+docs/agent/react/SKILL.md
+root/AGENTS.md
+
+
+Then instruct AI agents to read the relevant SKILL.md before coding.

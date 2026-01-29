@@ -1,7 +1,7 @@
 # skill-react
+This skill assumes a Tailwind-based or utility-first styling system.
 
 UI consistency playbook for **React** projects.
-
 ## Purpose
 - Keep styling consistent across screens and components
 - Encourage reuse of existing UI primitives
