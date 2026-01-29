@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "organization": "Frontend Engineering",
+  "date": "January 2026",
+  "abstract": "A UI consistency playbook for React projects. Focuses on reusing existing components, following design tokens, avoiding one-off styles, ensuring interaction states, and maintaining dark mode parity (when applicable). Designed to keep styling predictable for both humans and AI coding agents.",
+  "references": [
+    "https://react.dev",
+    "https://tailwindcss.com/docs",
+    "https://web.dev/learn/design-systems"
+  ]
+}
