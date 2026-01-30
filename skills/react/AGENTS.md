@@ -55,6 +55,20 @@ Agents MUST follow strictly:
 
 ---
 
+## Fixing UI drift (existing page does not match the template)
+
+When a newly generated screen (especially list/table pages) looks inconsistent:
+1) Pick a reference screen from `src/pages/**` that represents the canonical style.
+2) Refactor the new screen to match the reference in:
+   - wrapper/container classes
+   - card/table/list row patterns
+   - spacing and typography scale
+   - interaction states (hover/focus/disabled)
+   - dark mode parity
+3) Prefer copying and adapting the reference structure over creating new layout/styling.
+
+---
+
 ## Notes
 - `SKILL.md` is the UI execution playbook agents must follow
 - `metadata.json` provides high-level UI context and references

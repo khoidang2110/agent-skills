@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "organization": "Backend Engineering",
   "date": "January 2026",
-  "abstract": "A collection of agent skills and architectural playbooks for building production-grade NestJS APIs using Clean Architecture, Hexagonal (Ports & Adapters), and CQRS-lite. These skills enforce strict module boundaries, explicit dependency injection via tokens, and predictable API workflows, making large codebases easier for both humans and AI agents to maintain.",
+  "abstract": "A collection of agent skills and architectural playbooks for building production-grade NestJS APIs using Clean Architecture, Hexagonal (Ports & Adapters), CQRS-lite, and Prisma 6.x. These skills enforce strict module boundaries, explicit dependency injection via tokens, and predictable API workflows, making large codebases easier for both humans and AI agents to maintain.",
   "references": [
     "https://docs.nestjs.com",
     "https://martinfowler.com/architecture/hexagonal.html",

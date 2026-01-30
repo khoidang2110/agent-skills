@@ -1,10 +1,10 @@
 ---
 name: nestjs-clean-hex-cqrs-api-playbook
-description: Use this skill FIRST when implementing or modifying ANY NestJS API. Enforces Clean Architecture + Hexagonal (Ports & Adapters) with CQRS-lite and strict Nx module boundaries.
+description: Use this skill FIRST when implementing or modifying ANY NestJS API. Enforces Clean Architecture + Hexagonal (Ports & Adapters) with CQRS-lite, Prisma 6.x persistence, and strict Nx module boundaries.
 ---
 
 # NestJS API Playbook  
-**Clean Architecture + Hexagonal (Ports & Adapters) + CQRS-lite**
+**Clean Architecture + Hexagonal (Ports & Adapters) + CQRS-lite + Prisma 6.x**
 
 This skill defines the **mandatory architecture, layering rules, and step-by-step workflow**
 for implementing APIs in this repository.
@@ -19,7 +19,7 @@ for implementing APIs in this repository.
 → **QueryService / UseCase (libs/application/features)**  
 → **inject Port token (libs/application/contracts)**  
 → **Adapter + PersistenceModule (libs/persistence/repositories)**  
-→ **TypeORM entities (libs/persistence/typeorm/entities)**
+→ **Prisma schema/models (libs/persistence/prisma/schema.prisma)**
 
 Architecture style:
 - Clean Architecture
@@ -70,8 +70,8 @@ Responsible for:
 
 Rules:
 - ❌ Must NOT import:
-  - TypeORM repositories
-  - entities
+  - PrismaClient
+  - Prisma models/types
   - persistence adapters
 - ✅ May import:
   - application queries/usecases
@@ -90,8 +90,8 @@ Rules:
   - contracts (ports + tokens)
   - shared
 - ❌ Must NOT import:
-  - TypeORM
-  - DataSource
+  - PrismaClient
+  - Prisma types
   - persistence adapters/entities
 - Only **QueryService / UseCase** can throw `DomainError`
 
@@ -116,7 +116,9 @@ Never inject adapters directly
 2.4 Persistence (libs/persistence)
 Contains:
 
-TypeORM entities
+Prisma schema + migrations
+
+Prisma client module/provider
 
 adapters implementing ports
 
@@ -129,6 +131,10 @@ Implements ports defined in contracts
 One canonical implementation per port
 
 No parallel implementations for the same port
+
+Adapters use PrismaClient (injected) and map DB errors to DomainError
+
+Use Prisma 6.x only (no TypeORM)
 
 2.5 Shared (libs/shared)
 Contains:
@@ -310,7 +316,7 @@ SUPPORT_TICKET_CLOSED
 FILE_TYPE_NOT_ALLOWED
 
 7. Transactions
-Use typeorm-transactional if enabled
+Use Prisma transactions (`$transaction`)
 
 Avoid manual nested transactions
 
