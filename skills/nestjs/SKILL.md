@@ -322,31 +322,265 @@ Avoid manual nested transactions
 
 Transaction boundary belongs in UseCase
 
-8. Events
-In-memory (RAM)
-Use for non-critical internal flows:
+8. Events - Outbox Pattern – Simplified Implementation 
+Purpose
 
-UserRegistered
+Implement reliable side-effects (email, notifications, external calls) using Outbox Pattern, without over-engineering.
 
-TestEmail
+This setup is optimized for:
 
-Outbox (DB-backed)
-Use for reliable, cross-service events:
+Prisma 6.x
 
-PaymentSucceeded
+Clean Architecture + Hexagonal
 
-ItemsReceived
+CQRS-lite
 
-ImportReceiptQuantityRecorded
+≤ 10 events
+
+Dynamic PDF preview reuse
+
+Event Classification (MANDATORY)
+In-Memory Events (best-effort)
+
+Use when delivery is not critical.
+
+Example: UserRegistered
+
+Implementation:
+
+In-memory event bus
+
+No DB durability
+
+No retry guarantee
+
+Outbox Events (durable)
+
+Use when event must not be lost.
+
+Example:
+
+ImportReceiptFinished
+
+TestEmailRequested
+
+Implementation:
+
+DB-backed outbox
+
+Async processing
+
+Retry with backoff
 
 Rule:
 
-If it must not be lost → Outbox
+If losing the event is unacceptable → Outbox
+If best-effort is fine → In-memory
 
-If best-effort → In-memory
+Layer Responsibilities (STRICT)
+Domain (libs/domain)
 
-Final Rule
-If you are unsure:
+Event definitions only
 
-Copy the Balance feature structure exactly.
-Deviation requires architectural justification.
+EventNames
+
+*.event.ts payload types
+
+❌ No Prisma
+❌ No queues
+❌ No handlers
+
+Application (libs/application)
+
+UseCases orchestrate business flow
+
+Emits domain events
+
+Writes outbox inside transaction for durable events
+
+Allowed:
+
+Ports + tokens
+
+DomainError
+
+Forbidden:
+
+PrismaClient
+
+BullMQ
+
+Email providers
+
+Naming rule:
+
+*.write-outbox.handler.ts
+
+
+Handlers here only insert outbox rows, nothing else.
+
+Contracts (libs/application/src/contracts)
+
+Define ports + tokens
+
+Example:
+
+OUTBOX_WRITER_PORT
+
+Application injects by token, never adapters.
+
+Infrastructure / Persistence
+
+Prisma adapters
+
+Outbox processor
+
+Queue enqueue
+
+Workers (email, PDF, etc.)
+
+Allowed:
+
+PrismaClient
+
+BullMQ
+
+External services
+
+Transaction Rule (NON-NEGOTIABLE)
+
+For outbox events:
+
+Business update and
+
+Outbox insert
+
+MUST happen in the same Prisma transaction.
+
+✅ Correct:
+
+prisma.$transaction(tx => {
+  updateBusiness(tx)
+  outboxWriter.write(tx, event)
+})
+
+
+❌ Incorrect:
+
+Insert outbox after commit
+
+Separate transactions
+
+Outbox Processing (Minimal)
+Required Components
+
+OutboxWriter (insert row)
+
+OutboxProcessor (poll + retry)
+
+Single worker (≤ 10 events)
+
+No routers, no per-event queues (yet).
+
+Processing Rules
+
+Pick rows where:
+
+status = PENDING
+
+next_run_at <= now()
+
+On success:
+
+mark SENT
+
+On failure:
+
+increment attempts
+
+set next_run_at (backoff)
+
+Use DB index (status, next_run_at)
+
+Worker Strategy (Simple & Safe)
+PDF + Email Handling
+
+Do NOT call HTTP preview endpoints from workers
+
+Reuse the same PDF renderer/service
+
+Flow:
+
+Preview API:
+
+Query DB
+
+Render PDF
+
+Return response
+
+Worker:
+
+Query DB
+
+Render PDF using same renderer
+
+Send email
+
+This avoids:
+
+HTTP dependency
+
+Auth issues
+
+Circular calls
+
+Snapshot Policy (Current Decision)
+
+finish-scan locks data
+
+Worker renders PDF from DB at processing time
+
+No snapshot payload for now
+
+This is acceptable as long as finished data is immutable.
+
+Future upgrade (optional):
+
+Add JSON snapshot (no binary)
+
+Keep flow unchanged
+
+Folder Structure (Minimal)
+libs/
+  domain/
+    events/event-names.ts
+    <feature>/<event>.event.ts
+
+  application/
+    eventing/
+      in-memory-event-bus.ts
+      subscriptions.ts
+    features/
+      **/*.usecase.ts
+      **/*.write-outbox.handler.ts
+
+  application/contracts/
+    outbox/
+      outbox-writer.port.ts
+      outbox.tokens.ts
+
+  infrastructure/
+    outbox/
+      outbox-writer.adapter.ts
+      outbox-processor.service.ts
+    messaging/bullmq/
+      email.worker.ts
+
+Idempotency (Recommended)
+
+When enqueueing jobs:
+
+jobId = outbox_event.id
+
+Prevents duplicate processing.
