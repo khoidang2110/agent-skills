@@ -19,7 +19,7 @@ for implementing APIs in this repository.
 → **QueryService / UseCase (libs/application/features)**  
 → **inject Port token (libs/application/contracts)**  
 → **Adapter + PersistenceModule (libs/persistence/repositories)**  
-→ **Prisma schema/models (libs/persistence/prisma/schema.prisma)**
+→ **Prisma schema folder mode (libs/persistence/prisma/schema)**
 
 Architecture style:
 - Clean Architecture
@@ -44,14 +44,12 @@ Architecture style:
   - wire dependencies
 - They **must not** contain business logic
 
-### 1.3 Dependency direction
-api
-↓
-application
-↓
-contracts
-↑
-persistence
+
+### 1.3 Dependency direction (strict)
+- `libs/api` depends on `libs/application` + `libs/shared`
+- `libs/application` depends on `libs/application/contracts` (+ `libs/shared` + `libs/domain` if exists)
+- `libs/persistence` depends on `libs/application/contracts` and implements ports
+- `libs/application/contracts` depends on nothing (or shared types)
 
 
 No other direction is allowed.
@@ -97,7 +95,7 @@ Rules:
 
 ---
 
-### 2.3 Contracts (`libs/application/src/contracts`)
+### 2.3 Contracts (`libs/application/contracts`)
 Contains:
 - Ports (interfaces)
 - Tokens
@@ -149,13 +147,19 @@ error codes
 
 response helpers
 
+Rules:
+
 No business logic here.
 
 3. Workflow: Adding a New API (COPY THIS)
 Step A — Define Port + Token (Contracts)
+
 Location:
 
-libs/application/src/contracts/<feature>/ports/
+libs/application/contracts/<feature>/ports/
+
+libs/application/contracts/<feature>/<feature>.tokens.ts
+
 Files:
 
 <feature>.query.port.ts (read)
@@ -168,20 +172,21 @@ Rules:
 
 Application depends on ports, not adapters
 
-Token is injected everywhere
+Token is injected everywhere (no direct adapter injection)
 
 Step B — QueryService / UseCase (Application)
+
 Location:
 
-libs/application/src/features/<feature>/queries/
-libs/application/src/features/<feature>/usecases/
+libs/application/features/<feature>/queries/
+
+libs/application/features/<feature>/usecases/
+
 Naming:
 
-GetXxxQueryService
+Query: GetXxxQueryService, ListXxxQueryService
 
-CreateXxxUseCase
-
-UpdateXxxUseCase
+UseCase: CreateXxxUseCase, UpdateXxxUseCase, AdjustXxxUseCase
 
 Pattern:
 
@@ -192,14 +197,14 @@ Error handling:
 throw new DomainError(ErrorCode.X, 'message');
 Barrel export (REQUIRED):
 
-libs/application/src/features/<feature>/index.ts
+libs/application/features/<feature>/index.ts
 Step C — Adapter + PersistenceModule
 Adapter:
 
-libs/persistence/src/repositories/<feature>/<feature>.adapter.ts
+libs/persistence/repositories/<feature>/<feature>.adapter.ts
 Module:
 
-libs/persistence/src/repositories/<feature>/<feature>.persistence.module.ts
+libs/persistence/repositories/<feature>/<feature>.persistence.module.ts
 Binding pattern:
 
 providers: [
@@ -210,16 +215,15 @@ providers: [
 exports: [XXX_QUERY_PORT, XXX_USECASE_PORT],
 Rules:
 
-One adapter may implement multiple ports
+One adapter may implement multiple ports (use useExisting)
 
-Use useExisting
-
-Avoid duplicate implementations
+One port token has exactly one canonical implementation (avoid drift)
 
 Step D — Controller + ApiModule
 Controller location:
 
-libs/api/src/controllers/<feature>/<role>/
+libs/api/controllers/<feature>/<role>/
+
 Role conventions:
 
 user/
@@ -238,14 +242,15 @@ Do NOT accept {userId} from params for user APIs
 
 Api module:
 
-libs/api/src/controllers/<feature>/<feature>.module.ts
+libs/api/controllers/<feature>/<feature>.module.ts
+
 Imports:
 
 <Feature>PersistenceModule
 
 Providers:
 
-QueryService / UseCase classes
+QueryService / UseCase classes (repo currently provides directly in ApiModule)
 
 4. Naming & Route Conventions
 4.1 Naming
@@ -419,7 +424,7 @@ Naming rule:
 
 Handlers here only insert outbox rows, nothing else.
 
-Contracts (libs/application/src/contracts)
+Contracts (libs/application/contracts)
 
 Define ports + tokens
 
@@ -584,3 +589,90 @@ When enqueueing jobs:
 jobId = outbox_event.id
 
 Prevents duplicate processing.
+
+
+9) Prisma Schema Architecture (LOCKED)
+
+This repo uses Prisma schema folder mode (Prisma 6).
+
+9.1 Entry & source of truth
+
+Prisma CLI runs with:
+
+--schema=libs/persistence/prisma/schema
+
+Source of truth:
+
+libs/persistence/prisma/schema/schema.prisma
+
+Rules:
+
+schema.prisma contains generator + datasource ONLY
+
+❌ Do NOT define models/enums in schema.prisma
+
+9.2 Model structure (strict)
+
+Folder:
+
+libs/persistence/prisma/schema/models/
+
+Rules:
+
+1 file = 1 model
+
+A model file may include:
+
+exactly one model
+
+optional enums used ONLY by that model
+
+❌ Forbidden:
+
+multiple models in one file
+
+a generic models.prisma
+
+9.3 Enum strategy
+
+Shared enums (used by ≥2 models):
+
+libs/persistence/prisma/schema/enums/shared.prisma
+
+Single-model enums (used by exactly 1 model):
+
+colocate inside the model file under models/<model>.prisma
+
+Forbidden patterns:
+
+❌ Do NOT reintroduce giant enums.prisma
+
+❌ Do NOT duplicate enums across files
+
+❌ Do NOT duplicate generator/datasource outside schema.prisma
+
+9.4 Change workflow (mandatory)
+
+When modifying schema:
+
+decide enum scope (shared vs colocate)
+
+update schema files
+
+run:
+
+prisma format
+
+prisma validate
+
+prisma generate
+
+run migration only if schema semantics changed
+
+Status:
+
+schema split completed
+
+structure locked
+
+do not restructure again unless a major business decision

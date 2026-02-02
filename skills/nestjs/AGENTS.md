@@ -17,7 +17,7 @@ These rules apply when:
 ## Required reading (MUST READ FIRST)
 Before implementing or modifying ANY backend API:
 
-- docs/agent/nestjs/SKILL.md
+- `agent-docs/nestjs/SKILL.md`
 
 ---
 
@@ -47,5 +47,5 @@ Agents MUST follow strictly:
 ---
 
 ## Notes
-- `SKILL.md` is the execution playbook agents must follow
-- `metadata.json` provides high-level context and references
+- `agent-docs/nestjs/SKILL.md` is the execution playbook agents must follow
+- `metadata.json` (if present) provides high-level context and references

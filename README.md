@@ -9,37 +9,20 @@ A small collection of **agent skills / playbooks** to keep code consistent acros
 ## How to use in a project (simple copy)
 1) Copy the skill you need into your target project:
 - NestJS:
-cp -r skill/nestjs/SKILL.md <project>/docs/agent/nestjs/SKILL.md
+cp -r skill/nestjs/SKILL.md <project>/agent-docs/nestjs/SKILL.md
 
 - React:
-cp -r skill/reactjs/SKILL.md <project>/docs/agent/react/SKILL.md
+cp -r skill/reactjs/SKILL.md <project>/agent-docs/react/SKILL.md
 
 
-2) Add an `AGENTS.md` file at the **root** of the target project and point agents to the playbooks.
+2) Add an AGENTS.md file at the root of the target project
 
-### AGENTS.md template (recommended)
-```md
-# Agent Rules
+Point agents to the playbooks you copied.
 
-Before implementing or modifying ANY backend API:
-- Read: docs/agent/nestjs/SKILL.md
+AGENTS.md template examples
 
-Before implementing or modifying ANY React UI/styles:
-- Read: docs/agent/react/SKILL.md
+Backend only (NestJS): agent-docs/nestjs/SKILL.md
 
-
-## Quick start
-
-Copy only the skill you need into your project:
-
-NestJS:
-docs/agent/nestjs/SKILL.md
-root/AGENTS.md
-
-
-React:
-docs/agent/react/SKILL.md
-root/AGENTS.md
-
+Frontend only (React): agent-docs/react/SKILL.md
 
 Then instruct AI agents to read the relevant SKILL.md before coding.
