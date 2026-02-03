@@ -66,8 +66,11 @@ Rules:
 - Must NOT import:
   - PrismaClient / PrismaService / PrismaModule
   - persistence adapters/repos
-- Allowed:
-  - type-only import of enums/types from `@tps/persistence/prisma` (DTO enums / response shapes)
+  - `@tps/persistence/prisma` (even type-only)
+- If API needs enums/types, define them in `libs/application/contracts` or `libs/shared`.
+- Shared enums/types:
+  - cross-feature -> `libs/shared/types/`
+  - feature-scoped -> `libs/application/contracts/<feature>/dtos/`
 
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
@@ -79,12 +82,16 @@ Rules:
 - May depend on:
   - contracts (ports + tokens)
   - shared
-  - ✅ **type-only** import of enums/types from `@tps/persistence/prisma` (NO PrismaService/PrismaClient/PrismaModule)
 
 - Must NOT import:
   - PrismaClient / PrismaService / PrismaModule
   - persistence adapters/entities
   - `@prisma/client` runtime usage (value import)
+  - `@tps/persistence/prisma` (even type-only)
+- Use contracts/shared types instead of persistence types.
+- Shared enums/types:
+  - cross-feature -> `libs/shared/types/`
+  - feature-scoped -> `libs/application/contracts/<feature>/dtos/`
 - Only QueryService / UseCase can throw `DomainError`.
 
 ## 2.3 Cross-cutting conventions (helpers / mappers / builders) (LOCKED)
@@ -105,17 +112,18 @@ Goal: keep feature code discoverable, avoid random `common/` folders, and keep d
 #### A) API layer helpers (libs/api)
 Use for:
 - request/response mapping specific to controllers
-- swagger decorators wrappers
+- swagger decorator wrappers
 - pipe/validation helpers (DTO-centric)
 
 Location:
-- `libs/api/controllers/<feature>/<role>/_mappers/`
-- `libs/api/controllers/<feature>/<role>/_dtos/`
-- `libs/api/controllers/<feature>/<role>/_helpers/`
+- `libs/api/controllers/<feature>/<role>/mappers/`
+- `libs/api/controllers/<feature>/<role>/dtos/`
+- `libs/api/controllers/<feature>/<role>/helpers/`
 
 Rules:
 - Must be controller-scoped.
 - Must NOT be reused across roles unless duplicated intentionally or moved to shared.
+- Do NOT export these folders outside the controller/module.
 
 Naming:
 - `*.controller.ts`
@@ -125,52 +133,72 @@ Naming:
 
 #### B) Application layer helpers (libs/application)
 Use for:
-- mapping persistence results (plain data) -> application response DTO
+- mapping port return data (plain objects) -> application response DTO
 - business rule validators
-- builders for domain/application objects
+- builders for application objects (e.g., snapshot payload)
 - pure calculation utilities for this feature
 
 Location (recommended):
-- `libs/application/features/<feature>/queries/_mappers/`
-- `libs/application/features/<feature>/usecases/_mappers/`
-- `libs/application/features/<feature>/_helpers/`
-- `libs/application/features/<feature>/_builders/`
-- `libs/application/features/<feature>/_validators/`
+
+Query-specific:
+- `libs/application/features/<feature>/queries/mappers/`
+- `libs/application/features/<feature>/queries/validators/`
+
+UseCase-specific:
+- `libs/application/features/<feature>/usecases/mappers/`
+- `libs/application/features/<feature>/usecases/validators/`
+- `libs/application/features/<feature>/usecases/builders/`
+
+Feature-shared (only if reused by multiple queries/usecases in the same feature):
+- `libs/application/features/<feature>/helpers/`
+- `libs/application/features/<feature>/builders/`
+- `libs/application/features/<feature>/mappers/`
 
 Rules:
 - Keep helpers PRIVATE to the feature by default.
-- Do NOT export these folders from the feature `index.ts`.
+- Do NOT export helpers/, mappers/, builders/, validators/ from the feature index.ts.
+- Do NOT create ad-hoc common/ helper folders.
 
 Naming conventions:
 - Mapper: `*.mapper.ts` (pure functions)
-- Builder: `*.builder.ts` (constructs objects/DTOs)
-- Validator: `*.validator.ts` (throws DomainError)
-- Helper: `*.helper.ts` (pure utilities)
+- Builder: `*.builder.ts` (pure constructors/composers)
+- Validator: `*.validator.ts` (may throw DomainError)
+- Helper: `*.helper.ts` / `*.util.ts` (pure utilities)
+
+Validator rules:
+
+Validators MUST be pure (no IO).
+
+If a validator needs DB checks, the Query/UseCase must load data via ports first, then pass data into the validator.
 
 Examples:
-- `balance/_mappers/balance-response.mapper.ts`
-- `import-receipt/_validators/import-receipt-status.validator.ts`
-- `file/_helpers/file-size.helper.ts`
+
+balance/queries/mappers/balance-response.mapper.ts
+
+import-receipt/usecases/validators/import-receipt-status.validator.ts
+
+file/helpers/file-size.helper.ts
 
 #### C) Contracts layer (libs/application/contracts)
 Use for:
-- public DTOs shared across controllers/usecases (rare)
 - ports + tokens
+- DTO/types referenced by Port interfaces (stable contracts)
 
 Rules:
 - No helpers here.
 - DTOs here must be stable and meant as a contract.
+- No business logic.
 
 #### D) Persistence layer helpers (libs/persistence)
 Use for:
-- mapping Prisma records -> persistence adapter return models (plain objects)
-- query building helpers (Prisma args builders)
+- mapping Prisma records -> adapter return models (plain objects)
+- Prisma query argument builders
 - DB error mapping utilities
 
 Location:
-- `libs/persistence/repositories/<feature>/_mappers/`
-- `libs/persistence/repositories/<feature>/_builders/` (Prisma args builders)
-- `libs/persistence/repositories/<feature>/_errors/`
+- `libs/persistence/repositories/<feature>/mappers/`
+- `libs/persistence/repositories/<feature>/builders/` (Prisma args builders)
+- `libs/persistence/repositories/<feature>/errors/`
 
 Naming:
 - Prisma args builder: `*.prisma-args.builder.ts`
@@ -180,9 +208,7 @@ Naming:
 Rules:
 - Persistence helpers may import Prisma types and PrismaService.
 - Must NOT import application QueryService/UseCase.
-
----
-
+- Adapters MUST return plain objects/DTOs, not Prisma model instances.
 ### 2.3.3 Standard feature folder layout (recommended)
 
 Application:
@@ -239,10 +265,166 @@ libs/api/controllers/<feature>/<role>/
 Rules:
 - Mappers MUST be pure functions (no IO).
 - Builders/mappers/helpers must not call DB, HTTP, queue, filesystem.
+- Adapters MUST NOT return Prisma model instances. Return plain objects/DTOs only.
 - Validators may throw DomainError.
 - Builders must be deterministic (no Date.now/random unless injected explicitly).
 
 ---
+### 2.3.5 DTO placement rules (LOCKED)
+
+Goal: prevent DTO sprawl and keep contracts stable.
+
+#### A) API DTOs (HTTP-facing)
+Use for:
+- request validation (class-validator)
+- swagger decorators / OpenAPI schema
+- controller response shapes when they are strictly “web contract”
+
+Location:
+- `libs/api/controllers/<feature>/<role>/_dtos/`
+
+Rules:
+- API DTOs may use class-validator + swagger decorators.
+- API DTOs must NOT be imported by persistence.
+
+#### B) Application feature DTOs (internal)
+Use for:
+- internal query/usecase input/output types that are feature-private
+- intermediate data shapes (not a public contract)
+
+Location:
+- `libs/application/features/<feature>/dtos/` (optional)
+- or colocated near the usecase/query that owns it
+
+Rules:
+- Feature DTOs are not “public contracts”.
+- Do NOT export them from feature index.ts unless explicitly needed.
+
+#### C) Contracts DTOs (port contracts)
+Use for:
+- port input/output types and shared DTOs used across layers
+- stable shapes that application <-> persistence agree on
+
+Location:
+- `libs/application/contracts/<feature>/dtos/`
+
+Rules:
+- If a type appears in a Port interface, it MUST live in contracts.
+- Contracts must not contain logic.
+
+### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
+
+These terms are often mixed. Use this taxonomy to keep code discoverable.
+
+#### Mapper
+Purpose:
+- transform shape A -> shape B (usually 1-to-1)
+
+Characteristics:
+- pure function (no IO)
+- minimal/no business rules
+- typical use: Entity/Port result -> Response DTO
+
+Naming:
+- `*.mapper.ts`
+
+Functions:
+- `toXxxDto`, `toXxxDtos`
+
+#### Builder
+Purpose:
+- construct a new object by composing multiple sources and/or applying rules
+- typical use: snapshot payload, PDF model, export model, schema-versioned payload
+
+Characteristics:
+- pure & deterministic
+- may include normalization and field selection
+- MUST NOT do DB/HTTP/queue/file IO
+
+Naming:
+- `*.builder.ts`
+
+Functions:
+- `buildXxxPayloadV1`, `buildXxxModel`
+
+#### Helper (utility)
+Purpose:
+- small reusable pure utilities (formatting, checksum, stable stringify, etc.)
+
+Characteristics:
+- pure function
+- no IO
+- no feature business rules
+
+Naming:
+- `*.helper.ts` or `*.util.ts`
+
+Place in feature `_helpers/` or `libs/shared/utils/` if reused by ≥2 features.
+
+#### Writer/Service (orchestrator)
+Purpose:
+- orchestration that involves transactions and persistence calls
+
+Characteristics:
+- may do IO (DB/tx)
+- belongs in UseCase (application) or Adapter (persistence), depending on responsibility
+
+Naming:
+- `*.writer.ts`, `*.service.ts` (avoid calling these “helper”)
+- If it opens a Prisma transaction or calls an adapter, it is NOT a helper; name it `*UseCase`, `*Writer`, or `*Service`.
+
+### 2.3.7 Mapper sample pattern (RECOMMENDED)
+
+Use this when the response contract must stay stable even if storage changes.
+
+Location:
+- `libs/application/features/<feature>/queries/_mappers/`
+
+Example (Company):
+- `company-response.mapper.ts` exports pure functions:
+  - `toCompanyResponseDto(item)`
+  - `toCompanyResponseDtos(items)`
+
+Rules:
+- Do NOT import Prisma runtime.
+- Prefer minimal input “shape” types if you want to avoid leaking Prisma types.
+
+### 2.3.8 Snapshot layout (RECOMMENDED)
+
+For features with snapshot/versioning (e.g., Sales Invoice):
+
+Application:
+```text
+libs/application/features/<feature>/
+  usecases/
+    *.usecase.ts
+  snapshot/
+    <feature>.snapshot.types.ts
+    <feature>.snapshot.builder.ts     # builds payload (pure)
+  _helpers/
+    checksum.helper.ts                # optional if feature-only
+```
+
+Contracts:
+```text
+libs/application/contracts/<feature>/
+  ports/
+    <feature>.snapshot.port.ts
+  dtos/
+    snapshot.dtos.ts                  # only if referenced by ports
+```
+
+Persistence:
+```text
+libs/persistence/repositories/<feature>/
+  snapshot/
+    <feature>.snapshot.adapter.ts     # persist snapshot records only
+```
+
+Rules:
+- Snapshot payload building MUST be in application (builder).
+- Persistence only persists {payload, checksum, version, type}.
+- Builders MUST be pure and must not load data. UseCases load aggregates via ports, then pass to builders.
 ### 2.4 Contracts (`libs/application/contracts`)
 Contains:
 - ports (interfaces)
