@@ -64,12 +64,10 @@ Responsible for:
 
 Rules:
 - Must NOT import:
-  - PrismaClient
-  - Prisma models/types
-  - persistence adapters
-- May import:
-  - application queries/usecases
-  - shared guards/decorators
+  - PrismaClient / PrismaService / PrismaModule
+  - persistence adapters/repos
+- Allowed:
+  - type-only import of enums/types from `@tps/persistence/prisma` (DTO enums / response shapes)
 
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
@@ -81,13 +79,171 @@ Rules:
 - May depend on:
   - contracts (ports + tokens)
   - shared
+  - ✅ **type-only** import of enums/types from `@tps/persistence/prisma` (NO PrismaService/PrismaClient/PrismaModule)
+
 - Must NOT import:
-  - PrismaClient
-  - Prisma types
+  - PrismaClient / PrismaService / PrismaModule
   - persistence adapters/entities
+  - `@prisma/client` runtime usage (value import)
 - Only QueryService / UseCase can throw `DomainError`.
 
-### 2.3 Contracts (`libs/application/contracts`)
+## 2.3 Cross-cutting conventions (helpers / mappers / builders) (LOCKED)
+
+Goal: keep feature code discoverable, avoid random `common/` folders, and keep dependency direction clean.
+
+### 2.3.1 General rules
+- Prefer colocating helpers inside the feature that owns them.
+- Do NOT create new global `common/` folders unless the code is truly reused by ≥2 features.
+- Helpers MUST NOT import from persistence adapters or Prisma runtime.
+- Feature barrel exports (`libs/application/features/<feature>/index.ts`) MUST export ONLY:
+  - QueryServices / UseCases
+  - (optional) feature-level DTOs/types that are application-owned
+- ❌ Feature barrels MUST NOT re-export from `@tps/persistence/prisma` (no persistence leakage).
+
+### 2.3.2 Where to put helpers (by layer)
+
+#### A) API layer helpers (libs/api)
+Use for:
+- request/response mapping specific to controllers
+- swagger decorators wrappers
+- pipe/validation helpers (DTO-centric)
+
+Location:
+- `libs/api/controllers/<feature>/<role>/_mappers/`
+- `libs/api/controllers/<feature>/<role>/_dtos/`
+- `libs/api/controllers/<feature>/<role>/_helpers/`
+
+Rules:
+- Must be controller-scoped.
+- Must NOT be reused across roles unless duplicated intentionally or moved to shared.
+
+Naming:
+- `*.controller.ts`
+- `*.dto.ts`
+- `*.api-mapper.ts`
+- `*.api.helper.ts`
+
+#### B) Application layer helpers (libs/application)
+Use for:
+- mapping persistence results (plain data) -> application response DTO
+- business rule validators
+- builders for domain/application objects
+- pure calculation utilities for this feature
+
+Location (recommended):
+- `libs/application/features/<feature>/queries/_mappers/`
+- `libs/application/features/<feature>/usecases/_mappers/`
+- `libs/application/features/<feature>/_helpers/`
+- `libs/application/features/<feature>/_builders/`
+- `libs/application/features/<feature>/_validators/`
+
+Rules:
+- Keep helpers PRIVATE to the feature by default.
+- Do NOT export these folders from the feature `index.ts`.
+
+Naming conventions:
+- Mapper: `*.mapper.ts` (pure functions)
+- Builder: `*.builder.ts` (constructs objects/DTOs)
+- Validator: `*.validator.ts` (throws DomainError)
+- Helper: `*.helper.ts` (pure utilities)
+
+Examples:
+- `balance/_mappers/balance-response.mapper.ts`
+- `import-receipt/_validators/import-receipt-status.validator.ts`
+- `file/_helpers/file-size.helper.ts`
+
+#### C) Contracts layer (libs/application/contracts)
+Use for:
+- public DTOs shared across controllers/usecases (rare)
+- ports + tokens
+
+Rules:
+- No helpers here.
+- DTOs here must be stable and meant as a contract.
+
+#### D) Persistence layer helpers (libs/persistence)
+Use for:
+- mapping Prisma records -> persistence adapter return models (plain objects)
+- query building helpers (Prisma args builders)
+- DB error mapping utilities
+
+Location:
+- `libs/persistence/repositories/<feature>/_mappers/`
+- `libs/persistence/repositories/<feature>/_builders/` (Prisma args builders)
+- `libs/persistence/repositories/<feature>/_errors/`
+
+Naming:
+- Prisma args builder: `*.prisma-args.builder.ts`
+- Mapper: `*.persistence.mapper.ts`
+- Error mapping: `*.persistence-error.mapper.ts`
+
+Rules:
+- Persistence helpers may import Prisma types and PrismaService.
+- Must NOT import application QueryService/UseCase.
+
+---
+
+### 2.3.3 Standard feature folder layout (recommended)
+
+Application:
+```text
+libs/application/features/<feature>/
+  index.ts
+  queries/
+    get-*.query.ts
+    _mappers/
+      *.mapper.ts
+  usecases/
+    *.usecase.ts
+    _validators/
+      *.validator.ts
+    _builders/
+      *.builder.ts
+  _helpers/
+    *.helper.ts
+```
+
+Persistence:
+```text
+libs/persistence/repositories/<feature>/
+  <feature>.adapter.ts
+  <feature>.persistence.module.ts
+  _mappers/
+    *.persistence.mapper.ts
+  _builders/
+    *.prisma-args.builder.ts
+  _errors/
+    *.persistence-error.mapper.ts
+```
+
+API:
+```text
+libs/api/controllers/<feature>/<role>/
+  *.controller.ts
+  _dtos/
+    *.dto.ts
+  _mappers/
+    *.api-mapper.ts
+  _helpers/
+    *.api.helper.ts
+```
+
+
+---
+
+### 2.3.4 Mapper rules (strict)
+- API mappers map: HTTP DTO <-> Application request/response DTO.
+- Application mappers map: Port return data <-> Application response DTO.
+- Persistence mappers map: Prisma records <-> Adapter return data.
+
+Rules:
+- Mappers MUST be pure functions (no IO).
+- Builders/mappers/helpers must not call DB, HTTP, queue, filesystem.
+- Validators may throw DomainError.
+- Builders must be deterministic (no Date.now/random unless injected explicitly).
+
+---
+### 2.4 Contracts (`libs/application/contracts`)
 Contains:
 - ports (interfaces)
 - tokens
@@ -103,7 +259,7 @@ Rules:
 - Application injects by token.
 - Never inject adapters directly.
 
-### 2.4 Persistence (`libs/persistence`)
+### 2.5 Persistence (`libs/persistence`)
 Contains:
 - Prisma schema + migrations
 - Prisma client module/provider
@@ -114,10 +270,10 @@ Rules:
 - Implements ports defined in contracts.
 - One canonical implementation per port.
 - No parallel implementations for the same port.
-- Adapters use PrismaClient (injected) and map DB errors to `DomainError`.
+- Adapters use PrismaService (injected) and may use Prisma-generated types.
 - Use Prisma 6.x only (no TypeORM).
 
-### 2.5 Shared (`libs/shared`)
+### 2.6 Shared (`libs/shared`)
 Contains:
 - guards
 - decorators (`@CurrentUser`, `@Roles`)
@@ -341,9 +497,9 @@ For outbox events, business update and outbox insert MUST happen in the same Pri
 
 Correct:
 ```ts
-prisma.$transaction(tx => {
-  updateBusiness(tx);
-  outboxWriter.write(tx, event);
+await prisma.$transaction(async (tx) => {
+  await updateBusiness(tx);
+  await outboxWriter.write(tx, event);
 });
 ```
 
