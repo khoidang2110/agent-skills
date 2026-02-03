@@ -19,7 +19,7 @@ for implementing APIs in this repository.
 -> **QueryService / UseCase (libs/application/features)**
 -> **Inject Port token (libs/application/contracts)**
 -> **Adapter + PersistenceModule (libs/persistence/repositories)**
--> **Prisma schema folder mode (libs/persistence/prisma/schema)**
+-> **Prisma single schema file (libs/persistence/prisma/schema.prisma)**
 
 Architecture style:
 - Clean Architecture
@@ -66,12 +66,14 @@ Rules:
 - Must NOT import:
   - PrismaClient / PrismaService / PrismaModule
   - persistence adapters/repos
-  - `@tps/persistence/prisma` (even type-only)
-- If API needs enums/types, define them in `libs/application/contracts` or `libs/shared`.
+  - any persistence prisma package (even type-only)
+  - `@prisma/client` (even type-only)
+- If API needs enums/types, they MUST come from:
+  - cross-feature -> `libs/shared/types/`
+  - feature-scoped contract -> `libs/application/contracts/<feature>/dtos/`
 - Shared enums/types:
   - cross-feature -> `libs/shared/types/`
   - feature-scoped -> `libs/application/contracts/<feature>/dtos/`
-
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
 - business flows
@@ -86,12 +88,10 @@ Rules:
 - Must NOT import:
   - PrismaClient / PrismaService / PrismaModule
   - persistence adapters/entities
-  - `@prisma/client` runtime usage (value import)
-  - `@tps/persistence/prisma` (even type-only)
+  - `@prisma/client` (even type-only)
+  - any persistence prisma package (even type-only)
+- Application uses contract/shared enums/types only.
 - Use contracts/shared types instead of persistence types.
-- Shared enums/types:
-  - cross-feature -> `libs/shared/types/`
-  - feature-scoped -> `libs/application/contracts/<feature>/dtos/`
 - Only QueryService / UseCase can throw `DomainError`.
 
 ## 2.3 Cross-cutting conventions (helpers / mappers / builders) (LOCKED)
@@ -211,21 +211,23 @@ Rules:
 - Adapters MUST return plain objects/DTOs, not Prisma model instances.
 ### 2.3.3 Standard feature folder layout (recommended)
 
+Folder names MUST NOT start with '_' in this repo.
+
 Application:
 ```text
 libs/application/features/<feature>/
   index.ts
   queries/
     get-*.query.ts
-    _mappers/
+    mappers/
       *.mapper.ts
   usecases/
     *.usecase.ts
-    _validators/
+    validators/
       *.validator.ts
-    _builders/
+    builders/
       *.builder.ts
-  _helpers/
+  helpers/
     *.helper.ts
 ```
 
@@ -234,11 +236,11 @@ Persistence:
 libs/persistence/repositories/<feature>/
   <feature>.adapter.ts
   <feature>.persistence.module.ts
-  _mappers/
+  mappers/
     *.persistence.mapper.ts
-  _builders/
+  builders/
     *.prisma-args.builder.ts
-  _errors/
+  errors/
     *.persistence-error.mapper.ts
 ```
 
@@ -246,11 +248,11 @@ API:
 ```text
 libs/api/controllers/<feature>/<role>/
   *.controller.ts
-  _dtos/
+  dtos/
     *.dto.ts
-  _mappers/
+  mappers/
     *.api-mapper.ts
-  _helpers/
+  helpers/
     *.api.helper.ts
 ```
 
@@ -281,7 +283,7 @@ Use for:
 - controller response shapes when they are strictly “web contract”
 
 Location:
-- `libs/api/controllers/<feature>/<role>/_dtos/`
+- `libs/api/controllers/<feature>/<role>/dtos/`
 
 Rules:
 - API DTOs may use class-validator + swagger decorators.
@@ -359,7 +361,7 @@ Characteristics:
 Naming:
 - `*.helper.ts` or `*.util.ts`
 
-Place in feature `_helpers/` or `libs/shared/utils/` if reused by ≥2 features.
+Place in feature `helpers/` or `libs/shared/utils/` if reused by ≥2 features.
 
 #### Writer/Service (orchestrator)
 Purpose:
@@ -378,7 +380,7 @@ Naming:
 Use this when the response contract must stay stable even if storage changes.
 
 Location:
-- `libs/application/features/<feature>/queries/_mappers/`
+- `libs/application/features/<feature>/queries/mappers/`
 
 Example (Company):
 - `company-response.mapper.ts` exports pure functions:
@@ -401,7 +403,7 @@ libs/application/features/<feature>/
   snapshot/
     <feature>.snapshot.types.ts
     <feature>.snapshot.builder.ts     # builds payload (pure)
-  _helpers/
+  helpers/
     checksum.helper.ts                # optional if feature-only
 ```
 
@@ -771,55 +773,115 @@ Prevents duplicate processing.
 
 ## 9. Prisma Schema Architecture (LOCKED)
 
-This repo uses Prisma schema folder mode (Prisma 6).
+This repo uses a SINGLE Prisma schema file.
 
 ### 9.1 Entry & source of truth
 Prisma CLI runs with:
-- `--schema=libs/persistence/prisma/schema`
+- `--schema=libs/persistence/prisma/schema.prisma`
 
 Source of truth:
-- `libs/persistence/prisma/schema/schema.prisma`
+- `libs/persistence/prisma/schema.prisma`
 
 Rules:
-- `schema.prisma` contains generator + datasource only.
-- Do not define models/enums in `schema.prisma`.
+- `schema.prisma` contains datasource + generator + ALL models + ALL enums.
+- Do NOT use Prisma schema folder mode in this repo.
 
-### 9.2 Model structure (strict)
-Folder:
+Forbidden paths:
+- `libs/persistence/prisma/schema/`
 - `libs/persistence/prisma/schema/models/`
+- `libs/persistence/prisma/schema/enums/`
 
-Rules:
-- 1 file = 1 model.
-- A model file may include:
-  - exactly one model
-  - optional enums used only by that model
-- Forbidden:
-  - multiple models in one file
-  - a generic `models.prisma`
+### 9.2 Schema layout (recommended)
+Inside `schema.prisma`, use this ordering:
 
-### 9.3 Enum strategy
-Shared enums (used by 2 or more models):
-- `libs/persistence/prisma/schema/enums/shared.prisma`
+1) datasource
+2) generator
+3) `// ===== ENUMS (PERSISTENCE) =====`
+4) `// ===== MODELS (by domain blocks) =====`
 
-Single-model enums (used by exactly 1 model):
-- colocate inside the model file under `models/<model>.prisma`
+Notes:
+- Keep models grouped by domain using comment headers.
+- Keep naming consistent across relations.
 
-Forbidden patterns:
-- Do not reintroduce giant `enums.prisma`.
-- Do not duplicate enums across files.
-- Do not duplicate generator/datasource outside `schema.prisma`.
-
-### 9.4 Change workflow (mandatory)
+### 9.3 Change workflow (mandatory)
 When modifying schema:
-- decide enum scope (shared vs colocate)
-- update schema files
+- update `schema.prisma`
 - run:
   - `prisma format`
   - `prisma validate`
   - `prisma generate`
-- run migration only if schema semantics changed
+- run migration only if schema semantics changed.
 
-Status:
-- schema split completed
-- structure locked
-- do not restructure again unless a major business decision
+---
+
+## 10. Enum Rules (LOCKED)
+
+Goal:
+- Prevent persistence leakage.
+- Keep API/Application stable even if DB enums change.
+- Keep Nx boundaries clean.
+
+### 10.1 Never import Prisma enums outside persistence
+
+API (libs/api) and Application (libs/application) MUST NOT import:
+- `@prisma/client` (even type-only)
+- any persistence prisma package (even type-only)
+
+Persistence (libs/persistence) may use Prisma enums/types freely.
+
+### 10.2 Enum placement by scope (canonical)
+
+#### A) Contract enums (used in API/Application/Ports)
+
+Cross-feature enums -> libs/shared/types/
+
+Feature-scoped enums that appear in Port interfaces -> libs/application/contracts/<feature>/dtos/
+
+These are the ONLY enums allowed to appear in:
+
+Controller DTOs (validation/swagger)
+
+QueryService/UseCase inputs/outputs
+
+Port input/output types
+
+Optional:
+- Prefer const object + union type for contract enums to support validation/swagger easily.
+
+#### B) Persistence enums (DB-facing only)
+
+If an enum is truly DB-internal and never leaves persistence, it MAY exist only in schema.prisma.
+Persistence enums MUST NOT appear in Port DTOs or API DTOs.
+
+### 10.3 Naming conventions
+
+Enum type names: PascalCase (e.g. InvoiceStatus, UserRole)
+
+Values: SCREAMING_SNAKE_CASE (e.g. PENDING, APPROVED)
+
+Forbidden: generic names like Status, Type (ambiguous)
+
+### 10.4 Mapping rule (mandatory)
+
+Adapters MUST map persistence enum -> contract enum.
+
+If values match 1:1, mapping can be a simple cast/assign.
+
+If values differ, mapping MUST be explicit (switch/map) and tested.
+
+Adapters MUST NOT return Prisma model instances or Prisma enum types.
+Adapters return plain objects using contract enums/types.
+
+### 10.5 Enum change policy (migration-safe)
+
+Do NOT rename an enum value that already exists in production data in a single step.
+
+Safe workflow:
+
+Add new enum value
+
+Backfill data (SQL/script)
+
+Update application to use new value
+
+Remove old value in a later migration
