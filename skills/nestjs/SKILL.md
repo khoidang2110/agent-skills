@@ -349,22 +349,35 @@ Application layer MUST NOT “shape” output for HTTP naming.
 
 Persistence layer MUST NOT depend on API DTOs.
 
-#### D) Pagination meta (MANDATORY)
+#### D) Pagination response (MANDATORY) (UPDATED)
 
-If an endpoint returns pagination metadata, it MUST be snake_case:
+Pagination metadata MUST be snake_case and returned under page_meta.
+
+API layer MUST NOT return/ expose shared PageResult / PageMeta directly in HTTP responses (because they are camelCase contracts).
+
+Controllers MUST map pagination results to API DTOs (snake_case) via API mappers.
+
+Required fields (standard):
+
+page_meta.page
+
+page_meta.limit
 
 page_meta.total_items
 
 page_meta.total_pages
 
-page_meta.page
-
-page_meta.page_size
+Optional fields (if used, still snake_case):
 
 page_meta.has_next
 
-(Exact field names may vary, but MUST remain snake_case and consistent across endpoints.)
+page_meta.has_prev
 
+Notes:
+
+Do NOT use totalItems, totalPages, pageSize in HTTP responses.
+
+If existing endpoints return camelCase pagination meta, follow the Legacy / drift policy.
 #### E) Legacy / drift policy (MANDATORY)
 
 New endpoints MUST NOT introduce camelCase response fields.
