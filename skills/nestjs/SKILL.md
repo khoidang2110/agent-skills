@@ -313,6 +313,75 @@ Location:
 Rules:
 - If a type appears in a Port interface, it MUST live in contracts.
 - Contracts must not contain logic.
+### 2.3.5a JSON Naming Convention (SNAKE_CASE) (LOCKED)
+
+Goal: keep API contract consistent. This repo’s HTTP response contract is snake_case.
+
+#### A) Response contract (MANDATORY)
+
+All JSON responses from API endpoints MUST be snake_case, including:
+
+nested objects
+
+arrays of objects
+
+pagination metadata fields
+
+Examples:
+
+✅ voided_at, void_reason, created_at
+
+❌ voidedAt, voidReason, createdAt
+
+#### B) API DTO naming (MANDATORY)
+
+All DTOs in libs/api/controllers/**/dtos/ MUST use snake_case property names.
+
+Swagger/OpenAPI schemas MUST reflect snake_case (i.e., do not rely on runtime transforms that hide naming differences).
+
+#### C) Mapping responsibility (STRICT)
+
+Conversion between naming conventions is the responsibility of API layer mappers only:
+
+Application/Contracts DTO (camelCase) → API DTO (snake_case)
+
+Application layer MUST NOT “shape” output for HTTP naming.
+
+Persistence layer MUST NOT depend on API DTOs.
+
+#### D) Pagination meta (MANDATORY)
+
+If an endpoint returns pagination metadata, it MUST be snake_case:
+
+page_meta.total_items
+
+page_meta.total_pages
+
+page_meta.page
+
+page_meta.page_size
+
+page_meta.has_next
+
+(Exact field names may vary, but MUST remain snake_case and consistent across endpoints.)
+
+#### E) Legacy / drift policy (MANDATORY)
+
+New endpoints MUST NOT introduce camelCase response fields.
+
+If an endpoint already returns camelCase:
+
+mark as deprecated in Swagger (description + tag if available)
+
+add a new version/route returning snake_case
+
+migrate consumers, then remove old contract in a later release
+
+#### F) Implementation guidance (RECOMMENDED)
+
+Use explicit API mappers (*.api-mapper.ts) for conversion instead of global interceptors.
+
+Keep mappers pure (no IO) and controller-scoped.
 
 ### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
 
