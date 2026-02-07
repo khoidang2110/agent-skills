@@ -94,11 +94,11 @@ Rules:
 - Use contracts/shared types instead of persistence types.
 - Only QueryService / UseCase can throw `DomainError`.
 
-## 2.3 Cross-cutting conventions (helpers / mappers / builders) (LOCKED)
+### 2.3 Cross-cutting conventions (helpers / mappers / builders) (LOCKED)
 
 Goal: keep feature code discoverable, avoid random `common/` folders, and keep dependency direction clean.
 
-### 2.3.1 General rules
+#### 2.3.1 General rules
 - Prefer colocating helpers inside the feature that owns them.
 - Do NOT create new global `common/` folders unless the code is truly reused by ≥2 features.
 - Helpers MUST NOT import from persistence adapters or Prisma runtime.
@@ -107,7 +107,7 @@ Goal: keep feature code discoverable, avoid random `common/` folders, and keep d
   - (optional) feature-level DTOs/types that are application-owned
 - ❌ Feature barrels MUST NOT re-export from `@tps/persistence/prisma` (no persistence leakage).
 
-### 2.3.2 Where to put helpers (by layer)
+#### 2.3.2 Where to put helpers (by layer)
 
 #### A) API layer helpers (libs/api)
 Use for:
@@ -209,7 +209,7 @@ Rules:
 - Persistence helpers may import Prisma types and PrismaService.
 - Must NOT import application QueryService/UseCase.
 - Adapters MUST return plain objects/DTOs, not Prisma model instances.
-### 2.3.3 Standard feature folder layout (recommended)
+#### 2.3.3 Standard feature folder layout (recommended)
 
 Folder names MUST NOT start with '_' in this repo.
 
@@ -259,7 +259,7 @@ libs/api/controllers/<feature>/<role>/
 
 ---
 
-### 2.3.4 Mapper rules (strict)
+#### 2.3.4 Mapper rules (strict)
 - API mappers map: HTTP DTO <-> Application request/response DTO.
 - Application mappers map: Port return data <-> Application response DTO.
 - Persistence mappers map: Prisma records <-> Adapter return data.
@@ -272,11 +272,11 @@ Rules:
 - Builders must be deterministic (no Date.now/random unless injected explicitly).
 
 ---
-### 2.3.5 DTO placement rules (LOCKED)
+#### 2.3.5 DTO placement rules (LOCKED)
 
 Goal: prevent DTO sprawl and keep contracts stable.
 
-#### A) API DTOs (HTTP-facing)
+###### A) API DTOs (HTTP-facing)
 Use for:
 - request validation (class-validator)
 - swagger decorators / OpenAPI schema
@@ -289,7 +289,7 @@ Rules:
 - API DTOs may use class-validator + swagger decorators.
 - API DTOs must NOT be imported by persistence.
 
-#### B) Application feature DTOs (internal)
+##### B) Application feature DTOs (internal)
 Use for:
 - internal query/usecase input/output types that are feature-private
 - intermediate data shapes (not a public contract)
@@ -302,7 +302,7 @@ Rules:
 - Feature DTOs are not “public contracts”.
 - Do NOT export them from feature index.ts unless explicitly needed.
 
-#### C) Contracts DTOs (port contracts)
+##### C) Contracts DTOs (port contracts)
 Use for:
 - port input/output types and shared DTOs used across layers
 - stable shapes that application <-> persistence agree on
@@ -313,11 +313,11 @@ Location:
 Rules:
 - If a type appears in a Port interface, it MUST live in contracts.
 - Contracts must not contain logic.
-### 2.3.5a JSON Naming Convention (SNAKE_CASE) (LOCKED)
+#### 2.3.5a JSON Naming Convention (SNAKE_CASE) (LOCKED)
 
 Goal: keep API contract consistent. This repo’s HTTP response contract is snake_case.
 
-#### A) Response contract (MANDATORY)
+###### A) Response contract (MANDATORY)
 
 All JSON responses from API endpoints MUST be snake_case, including:
 
@@ -333,13 +333,13 @@ Examples:
 
 ❌ voidedAt, voidReason, createdAt
 
-#### B) API DTO naming (MANDATORY)
+##### B) API DTO naming (MANDATORY)
 
 All DTOs in libs/api/controllers/**/dtos/ MUST use snake_case property names.
 
 Swagger/OpenAPI schemas MUST reflect snake_case (i.e., do not rely on runtime transforms that hide naming differences).
 
-#### C) Mapping responsibility (STRICT)
+##### C) Mapping responsibility (STRICT)
 
 Conversion between naming conventions is the responsibility of API layer mappers only:
 
@@ -349,7 +349,7 @@ Application layer MUST NOT “shape” output for HTTP naming.
 
 Persistence layer MUST NOT depend on API DTOs.
 
-#### D) Pagination response (MANDATORY) (UPDATED)
+##### D) Pagination response (MANDATORY) (UPDATED)
 
 Pagination metadata MUST be snake_case and returned under page_meta.
 
@@ -378,7 +378,7 @@ Notes:
 Do NOT use totalItems, totalPages, pageSize in HTTP responses.
 
 If existing endpoints return camelCase pagination meta, follow the Legacy / drift policy.
-#### E) Legacy / drift policy (MANDATORY)
+##### E) Legacy / drift policy (MANDATORY)
 
 New endpoints MUST NOT introduce camelCase response fields.
 
@@ -390,17 +390,17 @@ add a new version/route returning snake_case
 
 migrate consumers, then remove old contract in a later release
 
-#### F) Implementation guidance (RECOMMENDED)
+#####F) Implementation guidance (RECOMMENDED)
 
 Use explicit API mappers (*.api-mapper.ts) for conversion instead of global interceptors.
 
 Keep mappers pure (no IO) and controller-scoped.
 
-### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
+#### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
 
 These terms are often mixed. Use this taxonomy to keep code discoverable.
 
-#### Mapper
+##### Mapper
 Purpose:
 - transform shape A -> shape B (usually 1-to-1)
 
@@ -415,7 +415,7 @@ Naming:
 Functions:
 - `toXxxDto`, `toXxxDtos`
 
-#### Builder
+##### Builder
 Purpose:
 - construct a new object by composing multiple sources and/or applying rules
 - typical use: snapshot payload, PDF model, export model, schema-versioned payload
@@ -431,7 +431,7 @@ Naming:
 Functions:
 - `buildXxxPayloadV1`, `buildXxxModel`
 
-#### Helper (utility)
+##### Helper (utility)
 Purpose:
 - small reusable pure utilities (formatting, checksum, stable stringify, etc.)
 
@@ -445,7 +445,7 @@ Naming:
 
 Place in feature `helpers/` or `libs/shared/utils/` if reused by ≥2 features.
 
-#### Writer/Service (orchestrator)
+##### Writer/Service (orchestrator)
 Purpose:
 - orchestration that involves transactions and persistence calls
 
@@ -457,7 +457,7 @@ Naming:
 - `*.writer.ts`, `*.service.ts` (avoid calling these “helper”)
 - If it opens a Prisma transaction or calls an adapter, it is NOT a helper; name it `*UseCase`, `*Writer`, or `*Service`.
 
-### 2.3.7 Mapper sample pattern (RECOMMENDED)
+#### 2.3.7 Mapper sample pattern (RECOMMENDED)
 
 Use this when the response contract must stay stable even if storage changes.
 
@@ -473,7 +473,7 @@ Rules:
 - Do NOT import Prisma runtime.
 - Prefer minimal input “shape” types if you want to avoid leaking Prisma types.
 
-### 2.3.8 Snapshot layout (RECOMMENDED)
+#### 2.3.8 Snapshot layout (RECOMMENDED)
 
 For features with snapshot/versioning (e.g., Sales Invoice):
 
@@ -532,13 +532,152 @@ Contains:
 - adapters implementing ports
 - persistence modules that bind tokens
 
+
 Rules:
 - Implements ports defined in contracts.
 - One canonical implementation per port.
 - No parallel implementations for the same port.
 - Adapters use PrismaService (injected) and may use Prisma-generated types.
 - Use Prisma 6.x only (no TypeORM).
+#### 2.5.1 Boundary rules (NON-NEGOTIABLE)
 
+libs/persistence ✅ depends on libs/application/contracts + libs/shared
+
+libs/persistence ❌ must NOT import libs/application/features (usecases/queries)
+
+libs/application ❌ must NOT import persistence runtime (PrismaService/PrismaModule/Adapters)
+
+If Application needs DB behavior:
+✅ define/extend a Port + Token in contracts, implement in persistence.
+
+#### 2.5.2 Naming rules (LOCKED)
+
+Adapters
+
+Files/classes implementing a Port MUST end with Adapter
+
+✅ ImportReceiptRepositoryAdapter
+
+✅ ImportReceiptReleaseAdapter
+
+✅ MoneyTransactionAdapter
+
+Modules
+
+Modules binding tokens MUST end with PersistenceModule
+
+✅ ImportReceiptPersistenceModule
+
+✅ MoneyTransactionPersistenceModule
+
+Repository Adapter = aggregator
+
+Repository adapter should be a thin entry point that delegates to sub-components.
+
+Heavy logic belongs in focused sub-components: receipt.query, lot.scan, receipt.recompute, release.*.
+
+#### 2.5.3 Token-only DI rule (CRITICAL)
+
+Application injects by token, never concrete adapter classes.
+
+Persistence follows the same rule for cross-feature usage:
+
+❌ do NOT inject another feature’s adapter class
+
+✅ inject the other feature’s port token and import its *PersistenceModule
+
+Goal: agents must NOT “move files” just to make DI work.
+
+#### 2.5.4 Cross-feature persistence dependency (LOCKED)
+
+If feature A needs capability from feature B:
+
+✅ import B’s *PersistenceModule
+
+✅ inject B’s port token
+
+❌ do not copy/move B’s adapter into A’s folder
+
+❌ do not re-provide B’s adapter inside A’s module (avoid duplicate providers / drift)
+
+#### 2.5.5 Transaction participation rule (LOCKED)
+
+Transaction boundary belongs to UseCase (application).
+
+Persistence adapters/sub-components may accept tx? to participate.
+
+Persistence should not “own” business transaction boundaries.
+
+#### 2.5.6 Recommended folder layout (RECOMMENDED)
+##### A) Feature persistence (example: import-receipt)
+libs/persistence/repositories/import-receipt/
+  import-receipt.repository.adapter.ts     # implements ImportReceiptRepositoryPort (delegator only)
+  import-receipt.persistence.module.ts     # binds IMPORT_RECEIPT_REPOSITORY_PORT
+
+  receipt/
+    receipt.query.ts                       # read: load receipt meta
+    receipt.recompute.ts                   # recompute totals + status
+
+  lot/
+    lot.scan.ts                            # find/upsert lot helpers for scan flow
+
+  release/
+    import-receipt-release.adapter.ts      # money release / balance side-effects
+
+
+Rule of thumb:
+
+*.repository.adapter.ts = thin delegator
+
+Move heavy SQL/branching into receipt/, lot/, release/.
+
+##### B) Cross-cutting persistence (example: money-transaction)
+libs/persistence/repositories/money-transaction/
+  money-transaction.adapter.ts
+  money-transaction.persistence.module.ts
+
+
+Do not place cross-cutting adapters inside feature folders.
+
+#### 2.5.7 Module composition rule (MANDATORY)
+
+Feature persistence module should import other persistence modules, not re-provide their adapters.
+
+Example:
+
+ImportReceiptPersistenceModule
+
+imports: MoneyTransactionPersistenceModule (if release needs it)
+
+providers: ImportReceiptRepositoryAdapter + sub-components
+
+exports: only the port token(s) it owns
+
+#### 2.5.8 Split policy (RECOMMENDED)
+
+Split when:
+
+file > ~250–300 lines, or
+
+a file mixes scan + recompute + release + inventory state transitions.
+
+Split by concern:
+
+receipt.query (read)
+
+lot.scan (scan helpers)
+
+receipt.recompute (totals/status)
+
+release/* (money/balance)
+
+optional inventory/* (item state transitions)
+
+#### 2.5.9 “Provide only what you use” rule (MANDATORY)
+
+If a module provides an adapter that is no longer injected, remove it.
+
+Avoid provider bloat that misleads future refactors.
 ### 2.6 Shared (`libs/shared`)
 Contains:
 - guards
