@@ -313,13 +313,13 @@ Location:
 Rules:
 - If a type appears in a Port interface, it MUST live in contracts.
 - Contracts must not contain logic.
-#### 2.3.5a JSON Naming Convention (SNAKE_CASE) (LOCKED)
+#### 2.3.5a JSON Response Naming & Pagination Envelope (SNAKE_CASE) (LOCKED)
 
-Goal: keep API contract consistent. This repo’s HTTP response contract is snake_case.
+Goal: keep HTTP response contracts consistent across the repo.
 
-###### A) Response contract (MANDATORY)
+##### A) Response JSON naming (MANDATORY)
 
-All JSON responses from API endpoints MUST be snake_case, including:
+All HTTP JSON responses MUST use snake_case, including:
 
 nested objects
 
@@ -333,31 +333,19 @@ Examples:
 
 ❌ voidedAt, voidReason, createdAt
 
-##### B) API DTO naming (MANDATORY)
+Notes:
 
-All DTOs in libs/api/controllers/**/dtos/ MUST use snake_case property names.
+This rule applies to response bodies. (Request/query naming is defined by feature DTOs and should prefer snake_case as well.)
 
-Swagger/OpenAPI schemas MUST reflect snake_case (i.e., do not rely on runtime transforms that hide naming differences).
+##### B) Pagination envelope (MANDATORY)
 
-##### C) Mapping responsibility (STRICT)
+Paginated endpoints MUST return pagination metadata under page_meta (snake_case).
 
-Conversion between naming conventions is the responsibility of API layer mappers only:
+Controllers MUST NOT return/ expose shared PageResult / PageMeta (camelCase) directly in HTTP responses.
 
-Application/Contracts DTO (camelCase) → API DTO (snake_case)
+Controllers MUST map pagination results to API response DTOs (snake_case) via API layer mappers/helpers.
 
-Application layer MUST NOT “shape” output for HTTP naming.
-
-Persistence layer MUST NOT depend on API DTOs.
-
-##### D) Pagination response (MANDATORY) (UPDATED)
-
-Pagination metadata MUST be snake_case and returned under page_meta.
-
-API layer MUST NOT return/ expose shared PageResult / PageMeta directly in HTTP responses (because they are camelCase contracts).
-
-Controllers MUST map pagination results to API DTOs (snake_case) via API mappers.
-
-Required fields (standard):
+Required page_meta fields (standard):
 
 page_meta.page
 
@@ -367,35 +355,119 @@ page_meta.total_items
 
 page_meta.total_pages
 
-Optional fields (if used, still snake_case):
+Optional fields (if used, MUST be snake_case and consistent):
 
 page_meta.has_next
 
 page_meta.has_prev
 
-Notes:
+Forbidden in HTTP responses:
 
-Do NOT use totalItems, totalPages, pageSize in HTTP responses.
+meta.totalItems, meta.totalPages, pageSize, totalItems, totalPages (camelCase anywhere)
 
-If existing endpoints return camelCase pagination meta, follow the Legacy / drift policy.
-##### E) Legacy / drift policy (MANDATORY)
+##### C) Naming conversion responsibility (STRICT)
 
-New endpoints MUST NOT introduce camelCase response fields.
+camelCase ↔ snake_case conversion for HTTP responses is the responsibility of the API layer only.
 
-If an endpoint already returns camelCase:
+Do NOT convert naming in Application or Persistence layers.
 
-mark as deprecated in Swagger (description + tag if available)
+Implementation guidance:
 
-add a new version/route returning snake_case
+Prefer explicit API mappers (*.api-mapper.ts) and a shared pure helper for pagination envelope mapping.
 
-migrate consumers, then remove old contract in a later release
+Do NOT rely on global interceptors that silently transform keys (Swagger/schema drift risk).
 
-#####F) Implementation guidance (RECOMMENDED)
+#### 2.3.5b DTO Ownership & Validation Location (LOCKED)
 
-Use explicit API mappers (*.api-mapper.ts) for conversion instead of global interceptors.
+Goal: prevent DTO sprawl, keep dependency direction clean, and avoid mixing HTTP concerns into contracts.
 
-Keep mappers pure (no IO) and controller-scoped.
+##### A) API DTOs are the HTTP contract (MANDATORY)
 
+API DTOs are the only place allowed to contain:
+
+class-validator decorators
+
+class-transformer decorators
+
+Swagger decorators (@ApiProperty, etc.)
+
+Location:
+
+libs/api/controllers/<feature>/<role>/dtos/
+
+Rules:
+
+API DTO property names MUST be snake_case (see 2.3.5a).
+
+API DTOs must NOT be imported by Persistence.
+
+##### B) Contracts DTOs are type-only (MANDATORY)
+
+Contracts DTOs are stable shapes used in Port interfaces and across layers.
+
+Location:
+
+libs/application/contracts/<feature>/dtos/
+
+Rules:
+
+Contracts DTOs MUST be type-only (interfaces/types), or plain classes without:
+
+class-validator
+
+class-transformer
+
+Swagger decorators
+
+If a type appears in a Port interface, it MUST live in contracts.
+
+Contracts MUST NOT contain business logic or helpers.
+
+##### C) Application DTOs are internal shapes (OPTIONAL)
+
+Application may define feature-private DTOs/types for internal orchestration.
+
+Location:
+
+libs/application/features/<feature>/dtos/ (optional) or colocated near the query/usecase.
+
+Rules:
+
+MUST NOT import Swagger or class-validator.
+
+Keep feature DTOs private; do not export from feature index.ts unless explicitly needed.
+
+##### D) Validation split (MANDATORY)
+
+There are two kinds of validation:
+
+Input validation (HTTP shape/range/format)
+
+Lives in API DTOs (controller layer).
+
+Examples: page >= 1, limit <= 100, string length, enum membership.
+
+Business rule validation (domain invariants)
+
+Lives in Application validators (*.validator.ts).
+
+MUST be pure (no IO).
+
+If DB checks are needed, Query/UseCase loads data via ports first, then passes data to validators.
+
+##### E) Import rules (STRICT)
+
+Application layer MUST NOT import:
+
+Swagger decorators
+
+class-validator
+
+class-transformer
+
+API DTOs from libs/api
+
+Persistence layer MUST NOT import API DTOs.
 #### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
 
 These terms are often mixed. Use this taxonomy to keep code discoverable.
