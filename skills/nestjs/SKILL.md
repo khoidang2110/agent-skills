@@ -77,33 +77,21 @@ Rules:
 
   ---
 ### 2.1.1 Controller DTOs & API Mappers (LOCKED)
+
 Goal: keep HTTP contract explicit (snake_case) and keep controllers thin.
 
 #### A) Where API DTOs live (MANDATORY)
 API DTOs (Swagger + class-validator/class-transformer) MUST live under `libs/api` only.
 
-**Preferred locations (match this repo):**
-
-1) **Feature-level DTOs (shared across roles)**
-Use when multiple controllers/roles share the same request/response DTOs.
+Preferred locations (match this repo):
+1) Feature-level DTOs (shared across roles)
 - `libs/api/controllers/<domain>/<feature>/dtos/`
 
-Examples:
-- `libs/api/controllers/catalog/store/dtos/`
-- `libs/api/controllers/payouts/payment/dtos/`
-- `libs/api/controllers/internal-fulfillment/import-receipt/dtos/`
-
-2) **Role-scoped DTOs (only for one role controller)**
-Use when the DTO is specific to one actor/route set.
+2) Role-scoped DTOs (only for one role)
 - `libs/api/controllers/<domain>/<feature>/<role>/dtos/`
 
-Example:
-- `libs/api/controllers/support-ticket/backoffice/dtos/`
-
-**API shared reusable DTOs (cross-feature)**
-- `libs/api/shared/dtos/`
-Example:
-- `libs/api/shared/dtos/base-page-query.dto.ts`
+3) API shared reusable DTOs (cross-feature)
+- `libs/api/controllers/shared/dtos/`
 
 Rules:
 - API DTO property names MUST be `snake_case` (see 2.3.5a).
@@ -114,38 +102,28 @@ API mappers shape the HTTP contract:
 - request: API DTO -> Application input
 - response: Application/Port DTO -> API response DTO (snake_case + page_meta)
 
-**Preferred locations (match this repo):**
-
-1) **Feature-level mappers (shared across roles)**
+Preferred locations:
+1) Feature-level mappers
 - `libs/api/controllers/<domain>/<feature>/mappers/`
 
-2) **Role-scoped mappers (only for one role controller)**
+2) Role-scoped mappers
 - `libs/api/controllers/<domain>/<feature>/<role>/mappers/`
 
-Naming:
-- `*.api-mapper.ts`
-- mapping functions: `toXxxApiDto`, `toXxxApiDtos`, `toXxxApiPageResult`
+3) Shared mappers (cross-feature)
+- `libs/api/controllers/shared/mappers/`
 
 Rules:
 - Mappers MUST be pure (no IO).
 - Controllers MUST NOT return Port/Application objects directly without mapping.
 
 #### C) Pagination query DTO rule (MANDATORY)
-- Base pagination query DTO lives in API shared:
-  - `libs/api/shared/dtos/base-page-query.dto.ts`
-- Controllers MUST define feature-local query DTOs extending the base (even if empty), located in:
-  - `libs/api/controllers/<domain>/<feature>/dtos/` OR
-  - `libs/api/controllers/<domain>/<feature>/<role>/dtos/`
-- Controllers MUST NOT use the base DTO directly as the endpoint query DTO.
+- Base pagination query DTO MUST be an API DTO located at:
+  - `libs/api/controllers/shared/dtos/`
+- Controllers MUST define feature-local query DTOs extending the base (even if empty).
 
 #### D) Pagination response envelope (MANDATORY)
-- Paginated endpoints MUST return `{ items, page_meta }` where `page_meta` uses snake_case fields:
-  - `page`, `limit`, `total_items`, `total_pages`
-- Controllers MUST NOT return shared `PageResult` / `PageMeta` directly.
-Note (RECOMMENDED):
-- Avoid naming collisions between API DTO classes and type-only DTOs. Prefer naming type-only pagination input as `PageQuery` / `BasePageQuery` to distinguish from API class DTOs.
-
----
+- Paginated endpoints MUST return `{ items, page_meta }` with snake_case fields.
+- Controllers MUST NOT return shared PageResult/PageMeta directly.
 
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
@@ -195,7 +173,7 @@ Location:
 - `libs/api/controllers/<feature>/<role>/dtos/`
 - `libs/api/controllers/<feature>/<role>/helpers/`
 - `libs/api/controllers/<domain>/<feature>/dtos|mappers|helpers/`
-- `libs/api/shared/...`
+- `libs/api/controllers/shared/...`
 Rules:
 - Must be controller-scoped.
 - Must NOT be reused across roles unless duplicated intentionally or moved to shared.
@@ -544,6 +522,40 @@ class-transformer
 API DTOs from libs/api
 
 Persistence layer MUST NOT import API DTOs.
+
+---
+
+##### F) Type-only folder & naming conventions (LOCKED)
+
+1) `dtos/` folders are reserved for API HTTP DTO classes (MANDATORY)
+- Only `libs/api/**/dtos/*.dto.ts` may contain class DTOs with decorators.
+- No type-only files are allowed under `dtos/` outside `libs/api`.
+
+2) Type-only definitions MUST live in `/types` folders (MANDATORY)
+All type-only shapes (`export type` / `export interface`, no decorators) MUST live in a `types/` folder.
+
+Locations:
+- Contracts:
+  - `libs/application/contracts/<feature>/types/`
+- Application feature internal:
+  - `libs/application/features/<feature>/types/`
+- Cross-feature shared:
+  - `libs/shared/types/`
+
+File naming:
+- `*.type.ts` (single main type) OR `*.types.ts` (group of related types)
+
+3) Type-only names MUST NOT use `*Dto` suffix (MANDATORY)
+Use semantic suffixes:
+- `*Input`, `*Query`, `*Result`, `*Output`, `*Filter`
+
+Examples:
+- `CreateProductDto` -> `CreateProductInput`
+- `ProductQueryDto` -> `ProductListQuery`
+
+4) Migration note (RECOMMENDED)
+Existing legacy folders `libs/application/contracts/**/dtos/` containing type-only files MUST be migrated to `types/`.
+
 #### 2.3.5c Type Safety at Boundaries (LOCKED)
 
 Goal: prevent shape drift, hidden casts, and unsafe contracts across layers.
