@@ -74,6 +74,79 @@ Rules:
 - Shared enums/types:
   - cross-feature -> `libs/shared/types/`
   - feature-scoped -> `libs/application/contracts/<feature>/dtos/`
+
+  ---
+### 2.1.1 Controller DTOs & API Mappers (LOCKED)
+Goal: keep HTTP contract explicit (snake_case) and keep controllers thin.
+
+#### A) Where API DTOs live (MANDATORY)
+API DTOs (Swagger + class-validator/class-transformer) MUST live under `libs/api` only.
+
+**Preferred locations (match this repo):**
+
+1) **Feature-level DTOs (shared across roles)**
+Use when multiple controllers/roles share the same request/response DTOs.
+- `libs/api/controllers/<domain>/<feature>/dtos/`
+
+Examples:
+- `libs/api/controllers/catalog/store/dtos/`
+- `libs/api/controllers/payouts/payment/dtos/`
+- `libs/api/controllers/internal-fulfillment/import-receipt/dtos/`
+
+2) **Role-scoped DTOs (only for one role controller)**
+Use when the DTO is specific to one actor/route set.
+- `libs/api/controllers/<domain>/<feature>/<role>/dtos/`
+
+Example:
+- `libs/api/controllers/support-ticket/backoffice/dtos/`
+
+**API shared reusable DTOs (cross-feature)**
+- `libs/api/shared/dtos/`
+Example:
+- `libs/api/shared/dtos/base-page-query.dto.ts`
+
+Rules:
+- API DTO property names MUST be `snake_case` (see 2.3.5a).
+- API DTOs MUST NOT be imported by `libs/application/**` or `libs/persistence/**`.
+
+#### B) Where API mappers live (MANDATORY)
+API mappers shape the HTTP contract:
+- request: API DTO -> Application input
+- response: Application/Port DTO -> API response DTO (snake_case + page_meta)
+
+**Preferred locations (match this repo):**
+
+1) **Feature-level mappers (shared across roles)**
+- `libs/api/controllers/<domain>/<feature>/mappers/`
+
+2) **Role-scoped mappers (only for one role controller)**
+- `libs/api/controllers/<domain>/<feature>/<role>/mappers/`
+
+Naming:
+- `*.api-mapper.ts`
+- mapping functions: `toXxxApiDto`, `toXxxApiDtos`, `toXxxApiPageResult`
+
+Rules:
+- Mappers MUST be pure (no IO).
+- Controllers MUST NOT return Port/Application objects directly without mapping.
+
+#### C) Pagination query DTO rule (MANDATORY)
+- Base pagination query DTO lives in API shared:
+  - `libs/api/shared/dtos/base-page-query.dto.ts`
+- Controllers MUST define feature-local query DTOs extending the base (even if empty), located in:
+  - `libs/api/controllers/<domain>/<feature>/dtos/` OR
+  - `libs/api/controllers/<domain>/<feature>/<role>/dtos/`
+- Controllers MUST NOT use the base DTO directly as the endpoint query DTO.
+
+#### D) Pagination response envelope (MANDATORY)
+- Paginated endpoints MUST return `{ items, page_meta }` where `page_meta` uses snake_case fields:
+  - `page`, `limit`, `total_items`, `total_pages`
+- Controllers MUST NOT return shared `PageResult` / `PageMeta` directly.
+Note (RECOMMENDED):
+- Avoid naming collisions between API DTO classes and type-only DTOs. Prefer naming type-only pagination input as `PageQuery` / `BasePageQuery` to distinguish from API class DTOs.
+
+---
+
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
 - business flows
@@ -98,6 +171,8 @@ Rules:
 
 Goal: keep feature code discoverable, avoid random `common/` folders, and keep dependency direction clean.
 
+---
+
 #### 2.3.1 General rules
 - Prefer colocating helpers inside the feature that owns them.
 - Do NOT create new global `common/` folders unless the code is truly reused by ≥2 features.
@@ -119,7 +194,8 @@ Location:
 - `libs/api/controllers/<feature>/<role>/mappers/`
 - `libs/api/controllers/<feature>/<role>/dtos/`
 - `libs/api/controllers/<feature>/<role>/helpers/`
-
+- `libs/api/controllers/<domain>/<feature>/dtos|mappers|helpers/`
+- `libs/api/shared/...`
 Rules:
 - Must be controller-scoped.
 - Must NOT be reused across roles unless duplicated intentionally or moved to shared.
@@ -468,6 +544,70 @@ class-transformer
 API DTOs from libs/api
 
 Persistence layer MUST NOT import API DTOs.
+#### 2.3.5c Type Safety at Boundaries (LOCKED)
+
+Goal: prevent shape drift, hidden casts, and unsafe contracts across layers.
+
+##### A) No explicit any at boundaries (MANDATORY)
+
+Explicit any is forbidden in:
+
+API Controllers (request/response types)
+
+Application QueryService / UseCase public methods
+
+Contracts Port interfaces and DTOs
+
+Persistence adapters implementing ports
+
+Use:
+
+concrete DTOs/types in libs/api/.../dtos (HTTP) and libs/application/contracts/.../dtos (ports)
+
+generics (T) when appropriate
+
+##### B) unknown usage policy (MANDATORY)
+
+unknown is allowed only when it is intentional:
+
+catch (error: unknown) and error boundaries
+
+untrusted/external payloads (must be parsed/validated before use)
+
+snapshot / generic JSON payloads that are intentionally schema-agnostic
+
+Forbidden:
+
+returning unknown from Ports or QueryService public methods when the shape is known
+
+Record<string, unknown> in contracts when a stable DTO exists (use a named type instead)
+
+##### C) Cast policy (MANDATORY)
+
+Avoid as unknown as X in Application and Persistence.
+
+If a cast is unavoidable, it MUST be:
+
+justified by the data source,
+
+localized in a mapper/helper,
+
+and not repeated across files.
+
+Special rule for transactions:
+
+Any cast from Tx → Prisma transaction client MUST live in a single persistence helper (see 7.1).
+
+##### D) Definition of done (RECOMMENDED)
+
+A refactor is considered clean when:
+
+rg -n "any" libs/application libs/persistence returns 0 results
+
+rg -n "as unknown as" libs/application libs/persistence returns only whitelist-allowed cases (catch/generic snapshot payload)
+
+nx build api --skip-nx-cache passes
+
 #### 2.3.6 Definitions: Mapper vs Builder vs Helper (LOCKED)
 
 These terms are often mixed. Use this taxonomy to keep code discoverable.
@@ -604,13 +744,15 @@ Contains:
 - adapters implementing ports
 - persistence modules that bind tokens
 
-
 Rules:
 - Implements ports defined in contracts.
 - One canonical implementation per port.
 - No parallel implementations for the same port.
 - Adapters use PrismaService (injected) and may use Prisma-generated types.
 - Use Prisma 6.x only (no TypeORM).
+
+---
+
 #### 2.5.1 Boundary rules (NON-NEGOTIABLE)
 
 libs/persistence ✅ depends on libs/application/contracts + libs/shared
@@ -911,6 +1053,58 @@ Examples:
 - Transaction boundary belongs in UseCase.
 
 ---
+### 7.1 Transactions - Unit of Work Port (LOCKED)
+
+Goal: keep transaction boundaries in Application while keeping Prisma details in Persistence.
+
+#### A) Transaction boundary (MANDATORY)
+
+Transaction boundary belongs in UseCase (Application layer).
+
+Application MUST NOT call Prisma $transaction directly.
+
+UseCases MUST open transactions via UNIT_OF_WORK_PORT.
+
+#### B) UnitOfWork contract (MANDATORY)
+
+Define UnitOfWorkPort and token UNIT_OF_WORK_PORT in libs/application/contracts/transaction/.
+
+Define Tx as an opaque type in contracts (no Prisma imports).
+
+Rules:
+
+Contracts/Application MUST NOT import Prisma runtime/types.
+
+Tx is passed through Application but only interpreted in Persistence.
+
+#### C) Persistence implementation (MANDATORY)
+
+Persistence implements UnitOfWorkPort using Prisma $transaction inside a dedicated adapter (e.g. PrismaUnitOfWorkAdapter).
+
+All casts to Prisma transaction client MUST be centralized via a single helper (e.g. tx.helper.ts).
+Forbidden: scattered as Prisma.TransactionClient across adapters.
+
+#### D) Ports and tx propagation (MANDATORY)
+
+Port methods that must run inside a transaction MUST accept tx: Tx (required).
+
+Do NOT use tx?: unknown / manager?: unknown in port interfaces.
+
+Read-only/query methods should not require tx unless strictly needed.
+
+#### E) Migration rule (RECOMMENDED)
+
+Migrate per feature/usecase:
+
+Introduce UNIT_OF_WORK_PORT usage in the UseCase
+
+Update affected port signatures to tx: Tx
+
+Update persistence adapters to unwrap Tx via helper
+
+Build must pass after each feature migration
+
+---
 
 ## 8. Events - Outbox Pattern (Simplified)
 
@@ -970,19 +1164,28 @@ Infrastructure / Persistence:
 - Allowed: `PrismaClient`, BullMQ, external services
 
 ### Transaction Rule (NON-NEGOTIABLE)
-For outbox events, business update and outbox insert MUST happen in the same Prisma transaction.
+For outbox events, business update and outbox insert MUST happen in the **same** transaction.
 
-Correct:
+Correct (Application uses UnitOfWorkPort):
 ```ts
-await prisma.$transaction(async (tx) => {
+await unitOfWork.runInTransaction(async (tx) => {
   await updateBusiness(tx);
   await outboxWriter.write(tx, event);
 });
 ```
+Notes:
+
+tx is an opaque Tx from contracts (no Prisma types in Application).
+
+Persistence implements UnitOfWorkPort using Prisma $transaction.
 
 Incorrect:
-- Insert outbox after commit.
-- Separate transactions.
+
+Insert outbox after commit.
+
+Separate transactions.
+
+- “Calling `prisma.$transaction` directly in Application is forbidden (see 7.1).”
 
 ### Outbox Processing (Minimal)
 Required components:
