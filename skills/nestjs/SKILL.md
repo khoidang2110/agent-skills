@@ -125,6 +125,103 @@ Rules:
 - Paginated endpoints MUST return `{ items, page_meta }` with snake_case fields.
 - Controllers MUST NOT return shared PageResult/PageMeta directly.
 
+---
+
+### 2.1.2 API Common vs Feature-local DTOs/Mappers (LOCKED)
+
+Goal: prevent “common sprawl” and avoid unnecessary refactors. libs/api/common/* is NOT a dumping ground.
+
+#### A) Default placement (MANDATORY)
+
+By default, API DTOs and API mappers MUST be feature-local:
+
+libs/api/controllers/<domain>/<feature>/dtos/
+
+libs/api/controllers/<domain>/<feature>/mappers/
+
+Role-specific variations live under role folder:
+
+libs/api/controllers/<domain>/<feature>/<role>/dtos/
+
+libs/api/controllers/<domain>/<feature>/<role>/mappers/
+
+Rule: “Not in common” does NOT mean “wrong”. Feature-local is the default and preferred.
+
+#### B) When to use libs/api/common/* (STRICT)
+
+Only move DTOs/mappers/helpers into libs/api/common/* if they are reused by ≥ 2 different features (cross-feature reuse) or are global HTTP building blocks.
+
+Allowed in libs/api/common/*:
+
+Cross-feature query primitives
+
+Base pagination query DTO (page/limit/q)
+
+date range, sorting, cursor params
+
+shared param DTOs (id/code params)
+
+Cross-feature response primitives
+
+pagination envelope { items, page_meta }
+
+page_meta DTO (snake_case)
+
+standard “ref” mini DTOs reused widely (e.g. CompanyRefApiDto { code, name }) only if reused by multiple features
+
+Cross-feature pure helpers/mappers
+
+toPageMetaApiDto(...)
+
+toPaginatedApiResponse(...) (snake_case)
+
+Forbidden in libs/api/common/*:
+
+Feature-specific request DTOs (approve/reject/create of a single feature)
+
+Feature-specific response DTOs (detail shapes unique to one feature)
+
+Feature-specific API mappers (product.api-mapper.ts, deal.api-mapper.ts, etc.) unless they are genuinely shared across features
+
+#### C) Feature-level reuse across roles (MANDATORY)
+
+If the same DTO/mapping is reused across multiple roles within the same feature (e.g., admin + backoffice for import-receipt),
+place it at feature-level (NOT common):
+
+libs/api/controllers/<domain>/<feature>/dtos/
+
+libs/api/controllers/<domain>/<feature>/mappers/
+
+Role folders should only contain deltas/customizations.
+
+#### D) Request DTO policy (MANDATORY)
+
+Request DTOs (Swagger + validation) stay near the controller/feature by default.
+
+Only “base primitives” go to common (page/limit/sort/date-range).
+Do NOT move feature request DTOs into common just to “deduplicate imports”.
+
+#### E) Refactor trigger (RECOMMENDED)
+
+A move to libs/api/common/* is justified when:
+
+same DTO/helper is used in ≥2 features, OR
+
+it enforces global HTTP contract consistency (snake_case/page_meta)
+
+Otherwise, keep it local.
+#### F) Agent move-check (MANDATORY)
+
+Before moving any DTO/mapper/helper into libs/api/common/*, the agent MUST verify reuse:
+
+Run a quick reference check (search imports/usages).
+
+If it is referenced only inside a single feature folder, it MUST remain feature-local.
+
+Only if referenced by ≥2 different features (cross-feature) may it be moved into libs/api/common/*.
+
+This rule prevents “common sprawl” and unnecessary refactors.
+
 ### 2.2 Application layer (`libs/application`)
 Responsible for:
 - business flows
