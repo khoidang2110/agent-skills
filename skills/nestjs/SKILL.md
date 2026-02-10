@@ -90,8 +90,8 @@ Preferred locations (match this repo):
 2) Role-scoped DTOs (only for one role)
 - `libs/api/controllers/<domain>/<feature>/<role>/dtos/`
 
-3) API shared reusable DTOs (cross-feature)
-- `libs/api/controllers/shared/dtos/`
+3) API common reusable DTOs (cross-feature)
+- `libs/api/common/dtos/`
 
 Rules:
 - API DTO property names MUST be `snake_case` (see 2.3.5a).
@@ -110,7 +110,7 @@ Preferred locations:
 - `libs/api/controllers/<domain>/<feature>/<role>/mappers/`
 
 3) Shared mappers (cross-feature)
-- `libs/api/controllers/shared/mappers/`
+- `libs/api/common/mappers/`
 
 Rules:
 - Mappers MUST be pure (no IO).
@@ -118,7 +118,7 @@ Rules:
 
 #### C) Pagination query DTO rule (MANDATORY)
 - Base pagination query DTO MUST be an API DTO located at:
-  - `libs/api/controllers/shared/dtos/`
+  - `libs/api/common/dtos/`
 - Controllers MUST define feature-local query DTOs extending the base (even if empty).
 
 #### D) Pagination response envelope (MANDATORY)
@@ -172,8 +172,15 @@ Location:
 - `libs/api/controllers/<feature>/<role>/mappers/`
 - `libs/api/controllers/<feature>/<role>/dtos/`
 - `libs/api/controllers/<feature>/<role>/helpers/`
-- `libs/api/controllers/<domain>/<feature>/dtos|mappers|helpers/`
-- `libs/api/controllers/shared/...`
+
+- `libs/api/controllers/<domain>/<feature>/dtos/`
+- `libs/api/controllers/<domain>/<feature>/mappers/`
+- `libs/api/controllers/<domain>/<feature>/helpers/`
+
+- `libs/api/common/dtos/`
+- `libs/api/common/mappers/`
+- `libs/api/common/helpers/`
+
 Rules:
 - Must be controller-scoped.
 - Must NOT be reused across roles unless duplicated intentionally or moved to shared.
