@@ -1383,6 +1383,58 @@ Prevents duplicate processing.
 
 ---
 
+### Queue & Worker Naming Convention (LOCKED)
+
+Goal: keep async side-effects discoverable, consistent naming, and avoid one-off queue sprawl.
+
+A) Naming (MANDATORY)
+
+Queue files MUST be named:
+libs/infrastructure/messaging/bullmq/queues/<feature-or-domain>.<queue>.queue.ts
+
+Worker files MUST be named:
+libs/infrastructure/messaging/bullmq/workers/<feature-or-domain>.<queue>.worker.ts
+
+Examples (match repo):
+
+queues/email.queue.ts ↔ workers/email.worker.ts
+
+queues/product-enrichment.queue.ts ↔ workers/product-enrichment.worker.ts
+
+Rule: queue name == worker name (same <queue> token).
+Do NOT create a worker without a corresponding queue file (and vice versa).
+
+B) Queue granularity (STRICT)
+
+Prefer one queue per domain capability, not one queue per event.
+
+✅ email queue handles many “send email” events.
+
+✅ product-enrichment queue handles enrichment jobs.
+
+❌ import-receipt-finished.queue.ts (too granular) unless there is a strong reason.
+
+If different job types have different throughput/priority/retry needs, split queues by capability:
+
+e.g. pdf-render.queue.ts, email.queue.ts
+
+C) Job naming & idempotency (MANDATORY)
+
+Each job MUST include:
+
+jobName = <EventName> (or <capability>:<action>)
+
+jobId = outbox_event.id (idempotency)
+
+Workers MUST switch/route by jobName (or handler registry) inside the same queue.
+
+D) Ownership & imports (STRICT)
+
+Workers/queues live in Infrastructure only.
+
+Application MUST NOT import BullMQ queue/worker code.
+
+Application emits domain/outbox events; infrastructure enqueues jobs from outbox.
 ## 9. Prisma Schema Architecture (LOCKED)
 
 This repo uses a SINGLE Prisma schema file.
